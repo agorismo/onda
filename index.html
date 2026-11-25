@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Onda Workstation, produção musical no navegador sem conta.">
+<meta name="theme-color" content="#101111"><title>Onda Workstation</title>
+<link rel="icon" href="./assets/icon.svg"><link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="symbols">
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h3l2-6 4 13 4-15 3 8h4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z" fill="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14" stroke-width="2.5"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor"/></symbol>
+<symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></symbol>
+<symbol id="i-loop" viewBox="0 0 24 24"><path d="m18 2 3 4-3 4M21 6H7a4 4 0 0 0-4 4v2m3 10-3-4 3-4m-3 4h14a4 4 0 0 0 4-4v-2"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M6 3h11l4 4v14H3V3zm2 0v7h8V3M7 21v-7h10v7"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5M4 14v7h16v-7"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16m6-16v16"/></symbol>
+<symbol id="i-piano" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m6-16v16M7 4v9m10-9v9"/></symbol>
+<symbol id="i-mix" viewBox="0 0 24 24"><path d="M5 4v16m7-16v16m7-16v16M2 9h6m1 6h6m1-7h6"/></symbol>
+<symbol id="i-trend" viewBox="0 0 24 24"><path d="M3 20l6-7 5 3 7-11"/><circle cx="9" cy="13" r="1.5"/><circle cx="14" cy="16" r="1.5"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><path d="M8 4 3 9l5 5M3 9h11a6 6 0 0 1 0 12"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="m16 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-drum" viewBox="0 0 24 24"><ellipse cx="12" cy="7" rx="9" ry="4"/><path d="M3 7v9c0 2 4 4 9 4s9-2 9-4V7M6 10l5 9m7-9-5 9"/></symbol>
+<symbol id="i-synth" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M6 13h3l2-5 3 8 2-3h2"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 3h9v11H3z"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16m-11 0V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8"/></symbol>
+</svg>
+<header class="top">
+ <a class="brand" href="./" aria-label="Onda Workstation"><span class="brandmark"><svg><use href="#i-wave"/></svg></span><span>onda<span class="branddot">.</span><small>WORKSTATION</small></span></a>
+ <div class="file"><span class="eyebrow">SESSÃO LOCAL</span><input id="title" aria-label="Nome do projeto" maxlength="64"></div>
+ <div class="actions"><button data-cmd="files" class="btn subtle"><svg><use href="#i-folder"/></svg><span>Projeto</span></button><button data-cmd="export" class="btn primary"><svg><use href="#i-down"/></svg><span>Exportar</span></button></div>
+</header>
+<div class="transport">
+ <div class="transport-buttons"><button id="play" data-cmd="play" class="ico transport-play" title="Reproduzir ou pausar (Espaço)" aria-label="Reproduzir"><svg><use href="#i-play"/></svg></button><button data-cmd="stop" class="ico" title="Parar" aria-label="Parar"><svg><use href="#i-stop"/></svg></button><button data-cmd="record" class="ico rec" title="Gravar áudio" aria-label="Gravar áudio"><svg><use href="#i-record"/></svg></button></div>
+ <div class="counter"><strong id="counter">01:01:00</strong><span>COMPASSO : TEMPO : TICK</span></div>
+ <label class="transport-field"><span>BPM</span><input id="bpm" type="number" min="40" max="250" title="Tempo do projeto" aria-label="BPM"></label>
+ <div class="mode" aria-label="Modo de reprodução"><button data-mode="song">MÚSICA</button><button data-mode="pattern">PADRÃO</button></div>
+ <button data-cmd="loop" class="ico" title="Repetição" aria-label="Repetição"><svg><use href="#i-loop"/></svg></button>
+ <label class="transport-field small"><span>SWING</span><input id="sw" type="number" min="0" max="65" aria-label="Swing em porcentagem"><small>%</small></label>
+ <div class="spacer"></div><div class="master-monitor"><span>MASTER</span><canvas id="meter" width="152" height="29" aria-label="Medidor de nível do master"></canvas></div>
+ <button data-cmd="undo" class="ico" aria-label="Desfazer" title="Desfazer (Ctrl+Z)"><svg><use href="#i-undo"/></svg></button><button data-cmd="redo" class="ico" aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)"><svg><use href="#i-redo"/></svg></button>
+</div>
+<div class="workspace">
+<aside class="sidebar" id="browser">
+ <div class="side-top"><div class="eyebrow">BIBLIOTECA LOCAL</div><h2>Sons <span id="soundcount">11</span></h2><p>Escolha um som pra pré-ouvir. Use + para criar uma faixa.</p></div>
+ <div id="sound-list"></div>
+ <div class="side-foot"><button data-cmd="sample" class="btn subtle wide"><svg><use href="#i-up"/></svg> Importar áudio</button><small>Seus arquivos ficam neste navegador.</small></div>
+</aside>
+<main>
+ <section class="header-work"><div><div class="eyebrow"><span class="signal"></span> ÁREA DE PRODUÇÃO</div><h1 id="page-heading">Arranjo<span>.</span></h1></div><div id="guide"></div></section>
+ <nav class="tabs" aria-label="Editores"><button data-view="arrange"><svg><use href="#i-grid"/></svg> Arranjo</button><button data-view="piano"><svg><use href="#i-piano"/></svg> Piano roll</button><button data-view="mix"><svg><use href="#i-mix"/></svg> Mixer</button><button data-view="plugins"><svg><use href="#i-wave"/></svg> Plugins</button><button data-view="auto"><svg><use href="#i-trend"/></svg> Automação</button><button id="show-sounds" class="mobile-only" data-cmd="sounds">Sons</button></nav>
+ <div class="panel" id="editor"></div>
+ <section class="panel rack"><div class="panel-top"><div><span class="eyebrow">RITMO   /   16 PASSOS POR COMPASSO</span><h2>Sequenciador</h2></div><div class="rack-actions"><button class="ico" id="bar-down" aria-label="Compasso anterior"><svg><use href="#i-back"/></svg></button><span id="stepbar">01 / 01</span><button class="ico" id="bar-up" aria-label="Próximo compasso"><svg><use href="#i-chevron"/></svg></button></div></div><div id="steps"></div></section>
+</main>
+</div>
+<footer><span><i></i> LOCAL<span id="save-status"> • pronto</span></span><span class="footer-tips"><kbd>Espaço</kbd> tocar / pausar <kbd>Esc</kbd> fechar <kbd>Ctrl+S</kbd> salvar</span><button data-cmd="help" class="text-button">Atalhos e ajuda</button><span class="version">ONDA / 2.0</span></footer>
+<aside id="studio-rec" class="studio-rec" hidden aria-label="Gravação ativa"><span class="rec-dot"></span><strong id="rec-label">Preparando</strong><span class="rec-meter"><i id="rec-meter"></i></span><span id="rec-time">00:00</span><button class="btn subtle" data-cmd="rec-stop">Parar tomada</button></aside>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dialog"><div id="dialog-content"></div></dialog>
+<input type="file" id="project-file" accept=".onda,.json,.mid,.midi" hidden>
+<input type="file" id="audio-file" accept="audio/*,.flac,.wav,.mp3,.ogg,.m4a,.aif,.aiff,.webm" hidden>
+<script type="module" src="./app.mjs"></script>
+</body>
+</html>

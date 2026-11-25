@@ -1,0 +1,5 @@
+{
+ "name":"onda-workstation","version":"2.0.0","private":true,"type":"module",
+ "description":"DAW local-first para produzir música no navegador.",
+ "scripts":{"start":"node serve.mjs","dev":"node serve.mjs","test":"node --test tests/project.test.mjs"}
+}
