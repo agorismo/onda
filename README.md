@@ -1,14 +1,20 @@
-# Onda Workstation 2 · Gravação & Plugins
+# Onda Workstation 2.1 · Interface de estúdio
 
 Produção musical no navegador. Sem conta, sem backend, sem dependências de execução. Abre com uma sessão de demonstração original para explorar o fluxo completo antes de começar do zero.
 
+O visual 2.1 se inspira na [organização das janelas do FL Studio](https://www.image-line.com/fl-studio-learning-content/fl-studio-online-manual/html/basics_workflow.htm), com design e ícones próprios. É um projeto independente, sem afiliação com a Image-Line. O formato de projeto continua sendo .onda, não .flp.
+
+- **F5** Playlist, **F6** Channel Rack, **F7** Piano Roll, **F9** Mixer, **Alt+F8** Browser. Alguns navegadores ou sistemas interceptam teclas de função; todos os editores também estão na barra superior.
+- No computador, use **Desencaixar Channel Rack**, no cabeçalho do rack, e arraste pela barra de título. Clique no mesmo botão para voltar à posição fixa.
+- A Playlist tem zoom; o Piano Roll tem uma faixa de velocidade por nota. Clique numa barra para selecionar a nota e mudar o valor. No Mixer, clique num canal e depois num slot para abrir a cadeia de efeitos.
+
 ## Comece por aqui
 
-1. Clique em **Reproduzir** para ouvir a demonstração, ou em **Projeto → Projeto vazio**.
-2. Use **+** na biblioteca para adicionar um instrumento. Monte a batida no sequenciador ou desenhe notas no **Piano roll**. A faixa só toca na música se tiver um clipe no **Arranjo**.
+1. Clique em **Reproduzir** para ouvir a demonstração, ou em **Arquivo → Projeto vazio**.
+2. Use **+** na biblioteca para adicionar um instrumento. Monte a batida no sequenciador ou desenhe notas no **Piano Roll**. A faixa só toca na música se tiver um clipe no **Playlist**.
 3. Para repetir um padrão, clique em outro compasso vazio na faixa. Arraste clipes pra mover e dê dois cliques para abrir o piano roll. **Padrão** abre a lista para criar, trocar, duplicar e nomear padrões.
 4. Misture no **Mixer**, ajuste os efeitos e crie curvas de volume em **Automação**.
-5. Exporte a música, o padrão atual ou uma faixa em **WAV**. Em **Projeto → Backup .onda**, salve uma cópia que continua editável e contém os samples.
+5. Exporte a música, o padrão atual ou uma faixa em **WAV**. Em **Arquivo → Backup .onda**, salve uma cópia que continua editável e contém os samples.
 
 ### Rodar localmente
 
@@ -38,7 +44,7 @@ Envie para a raiz do repositório os **arquivos de dentro desta pasta** (incluin
 1. Importe a base ou abra um arranjo. Clique no botão vermelho **Gravar áudio**.
 2. Escolha o compasso inicial, mono ou estéreo, dispositivo, ganho e 16 ou 24 bits. Deixe **Tocar a base** ligado para gravar por cima. Escolha a contagem. Use **Parar após** para fixar uma janela, ou deixe 0 e pare manualmente.
 3. A tomada entra como novo clipe no compasso escolhido. Se a voz chega atrasada, coloque um número positivo em **Compensar atraso** e grave um teste curto; isso desloca o áudio capturado para mais cedo. A resolução do relógio é por amostra, mas a latência real depende da interface e do driver.
-4. Selecione a tomada, abra **Plugins** e use o seletor de canal ou **Mixer → Cadeia**. **Presets → Voz próxima** é um ponto de partida. Para afinação, insira **Afinação Vocal** antes do compressor, escolha a tonalidade e comece com intensidade moderada. Ela é monofônica, não separa vozes sobrepostas e não preserva formantes como ferramentas dedicadas.
+4. Selecione a tomada, abra **Plugins** e use o seletor de canal ou **Mixer → Editar inserts**. **Presets → Voz próxima** é um ponto de partida. Para afinação, insira **Afinação Vocal** antes do compressor, escolha a tonalidade e comece com intensidade moderada. Ela é monofônica, não separa vozes sobrepostas e não preserva formantes como ferramentas dedicadas.
 5. Exporte em **48 kHz / 24 bits**, ou use 44,1 kHz / 16 bits quando precisar do formato tradicional. O mute e o bypass são respeitados no WAV. Projeto salvo em .onda continua editável.
 
 A monitoração direta fica desligada por padrão. Se ligar, use fones; ela não passa pelos inserts e pode ter atraso. O Onda grava uma entrada por tomada (mono ou estéreo, se a entrada fornecer dois canais), não várias interfaces ao mesmo tempo. Não há compensação automática de latência de hardware nem ajuste automático de fase entre plugins.

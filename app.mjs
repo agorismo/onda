@@ -9,13 +9,56 @@ const ic=s=>'<svg aria-hidden="true"><use href="#i-'+s+'"/></svg>'
 const escaped=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const pad=(n,l=2)=>String(n).padStart(l,'0')
 const tone=t=>COLORS[t?.color??0]
-const viewNames={arrange:'Arranjo',piano:'Piano roll',mix:'Mixer',plugins:'Plugins',auto:'Automação'}
+const viewNames={arrange:'Playlist',piano:'Piano Roll',mix:'Mixer',plugins:'Plugins',auto:'Automação'}
 const guides={arrange:'Clique no grid para inserir um padrão. Arraste o clipe para mover.',piano:'Clique para desenhar. Arraste as bordas para alterar a duração.',mix:'Volume, panorama e efeitos por faixa.',plugins:'Da voz ao master: coloque os efeitos na ordem em que o som deve passar.',auto:'Crie pontos de volume e curvas entre os compassos.'}
 const dlog=$('#dialog'),editor=$('#editor')
 let d=demo(), view='arrange', mode='song',tick=0, trackId='', patternId='', selectedClip='', selectedNote='', stepBar=0, octave=4, snap=STEP
 let fxTarget='master',fxSelected='',fxType='eq',recWait=false,recPrefs={bars:0,count:1,latency:0,channels:1,depth:24,monitor:false,inputGain:0,backing:true},captureNumber=1,exportRate=48000,exportDepth=24
 let clockHeard=0, pending=false, history=[],future=[],saveTimer=0,restart=0, toastTimer=0, noAuto=false, mic=null, sampleTarget='', altScroll=null, waveform=new Map, busy=false
 const patterns=new Map()
+const PITCH_ROW=20, rackPanel=$('#channel-rack'), sidebar=$('#browser'), desktop=matchMedia('(min-width:761px)')
+let rackOpen=desktop.matches, rackFloat=false, rackPosition=null, windowDrag=null, libraryTab='sounds', mixTarget='master', playlistZoom=92
+const shortcuts={F5:'arrange',F7:'piano',F9:'mix'}
+function centerOctave(p){
+ if(!p?.notes.length)return
+ const pitches=p.notes.map(x=>x.m).sort((a,b)=>a-b),center=pitches[Math.floor(pitches.length/2)]
+ octave=clamp(Math.floor((center+8)/12)-1,0,8)
+}
+function setView(next){if(next==='piano'&&view!=='piano')centerOctave(chosen());view=next;selectedNote='';draw()}
+function redrawShell(){
+ const rb=$('.tabs [data-cmd="rack"]'), sb=$('#show-sounds')
+ rackPanel.hidden=!rackOpen;rb.classList.toggle('active',rackOpen);rb.setAttribute('aria-expanded',String(rackOpen))
+ const shown=desktop.matches?!sidebar.classList.contains('closed'):sidebar.classList.contains('show')
+ sb.classList.toggle('active',shown);sb.setAttribute('aria-expanded',String(shown))
+}
+function toggleRack(){rackOpen=!rackOpen;redrawShell()}
+function toggleBrowser(){
+ sidebar.classList.toggle(desktop.matches?'closed':'show');redrawShell()
+}
+function floatRack(on){
+ rackFloat=on
+ rackPanel.classList.toggle('floating',on)
+ const btn=$('[data-cmd="rack-float"]'),name=on?'Encaixar Channel Rack':'Desencaixar Channel Rack'
+ btn.title=name;btn.setAttribute('aria-label',name)
+ if(on)placeRack(rackPosition||[innerWidth-rackPanel.offsetWidth-20,140])
+ else {rackPanel.style.removeProperty('top');rackPanel.style.removeProperty('left')}
+}
+function placeRack([x,y]){
+ const w=rackPanel.offsetWidth,h=rackPanel.offsetHeight
+ rackPosition=[clamp(x,6,Math.max(6,innerWidth-w-6)),clamp(y,6,Math.max(6,innerHeight-h-6))]
+ rackPanel.style.left=rackPosition[0]+'px';rackPanel.style.top=rackPosition[1]+'px'
+}
+$('#rack-handle').addEventListener('pointerdown',e=>{
+ if(!rackFloat||e.button!==0||e.target.closest('button'))return
+ const b=rackPanel.getBoundingClientRect()
+ windowDrag={id:e.pointerId,x:e.clientX-b.left,y:e.clientY-b.top}
+ e.currentTarget.setPointerCapture(e.pointerId)
+})
+$('#rack-handle').addEventListener('pointermove',e=>{if(windowDrag?.id===e.pointerId)placeRack([e.clientX-windowDrag.x,e.clientY-windowDrag.y])})
+for(const type of ['pointerup','pointercancel','lostpointercapture'])$('#rack-handle').addEventListener(type,()=>windowDrag=null)
+desktop.addEventListener('change',()=>{if(!desktop.matches&&rackFloat)floatRack(false);redrawShell()})
+window.addEventListener('resize',()=>{if(rackFloat&&!rackPanel.hidden)placeRack(rackPosition)})
+
 const selected=()=>d.tracks.find(t=>t.id===trackId)||d.tracks[0]
 const chosen=()=>d.patterns.find(p=>p.id===patternId&&p.track===selected().id)
 const nm=p=>p?.name||'Sem padrão'
@@ -32,7 +75,7 @@ function select(t,p){
  if(t)trackId=t.id||t
  const real=selected()
  const a=p||current(real)
- if(view==='piano'&&a?.notes.length){const center=a.notes.map(x=>x.m).sort((a,b)=>a-b)[Math.floor(a.notes.length/2)];octave=clamp(Math.floor((center+8)/12)-1,0,8)}
+ if(view==='piano')centerOctave(a)
  patternId=a?.id||''
  if(a)patterns.set(real.id,a.id)
  stepBar=0;selectedNote=''
@@ -101,15 +144,22 @@ function renderTransport(){
  $('#play').innerHTML=ic(player.playing||pending?'pause':'play')
  $('#play').setAttribute('aria-label',player.playing||pending?'Pausar':'Reproduzir')
  $('[data-cmd="record"]').classList.toggle('active',!!mic)
- $('#page-heading').innerHTML=viewNames[view]+'<span>.</span>'
- $('#guide').innerHTML='<p>'+guides[view]+'</p>'
+ $('#page-heading').textContent=viewNames[view]
+ $('#guide').textContent=guides[view]
+ const tp=$('#transport-pattern'), signature=JSON.stringify([trackId,patternId,d.patterns.map(p=>[p.id,p.name])])
+ if(tp.dataset.signature!==signature){tp.dataset.signature=signature;tp.innerHTML=menuPatterns(selected())+'<button data-cmd="pattern-new" class="ico" aria-label="Gerenciar padrão" title="Gerenciar padrão">'+ic('plus')+'</button>'}
+ redrawShell()
 }
 function library(){
- $('#sound-list').innerHTML=['drum','synth'].map((type,i)=>'<div class="group-title">'+['PERCUSSÃO','INSTRUMENTOS'][i]+'</div>'+Object.entries(PRESETS).filter(([_,v])=>v[1]===type).map(([k,[n]])=>'<div class="preset '+type+'"><button class="listen" data-preview="'+k+'" aria-label="Pré-ouvir '+n+'">'+ic(type)+escaped(n)+'</button><button class="ico" data-add="'+k+'" title="Adicionar '+n+'" aria-label="Adicionar '+n+'">'+ic('plus')+'</button></div>').join('')).join('')
+ $$('[data-library]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.library===libraryTab)))
+ $('#sound-list').innerHTML=libraryTab==='sounds'?['drum','synth'].map((type,i)=>'<details open class="sound-group"><summary>'+ic('folder')+['Percussão','Instrumentos'][i]+'</summary>'+Object.entries(PRESETS).filter(([_,v])=>v[1]===type).map(([k,[n]])=>'<div class="preset '+type+'"><button class="listen" data-preview="'+k+'" aria-label="Pré-ouvir '+n+'">'+ic(type)+escaped(n)+'</button><button class="ico" data-add="'+k+'" title="Adicionar '+n+'" aria-label="Adicionar '+n+'">'+ic('plus')+'</button></div>').join('')+'</details>').join(''):'<div class="browser-group">'+ic('folder')+' Padrões do projeto</div>'+d.patterns.map(p=>{const t=d.tracks.find(t=>t.id===p.track);return '<button class="browser-pattern '+(p.id===patternId?'active':'')+'" data-library-pattern="'+p.id+'" '+getColor(t)+'><span class="dot"></span><span>'+escaped(p.name)+'<small>'+escaped(t?.name||'')+'</small></span></button>'}).join('')
 }
-function header(section,title,tools){return '<div class="panel-top"><div><span class="eyebrow">'+section+'</span><h2>'+escaped(title)+'</h2></div><div class="panel-tools">'+tools+'</div></div>'}
+function header(section,title,tools){
+ const symbol={arrange:'grid',piano:'piano',mix:'mix',plugins:'wave',auto:'trend'}[view]
+ return '<div class="window-title"><h2>'+ic(symbol)+' '+viewNames[view]+(title!==viewNames[view]?' <small> / '+escaped(title)+'</small>':'')+'</h2><span class="window-meta">'+escaped(section)+'</span></div><div class="panel-top"><span class="tool-mark" aria-hidden="true">'+ic('tools')+'</span><div class="panel-tools">'+tools+'</div></div>'
+}
 function menuPatterns(t){
- return '<select data-field="pat" aria-label="Selecionar padrão">'+d.patterns.filter(p=>p.track===t.id).map(p=>'<option value="'+p.id+'" '+(p.id===patternId?'selected':'')+'>'+escaped(p.name)+'</option>').join('')+'</select>'
+ return '<select data-field="pat" aria-label="Selecionar padrão">'+(d.patterns.some(p=>p.track===t.id)?d.patterns.filter(p=>p.track===t.id):[{id:'',name:'Sem padrão'}]).map(p=>'<option value="'+p.id+'" '+(p.id===patternId?'selected':'')+'>'+escaped(p.name)+'</option>').join('')+'</select>'
 }
 function muteButton(t,k,label){
  const v=t[k];return '<button class="mini '+(k==='solo'?'s ':'')+(v?'active':'')+'" aria-pressed="'+v+'" data-toggle="'+k+'" data-id="'+t.id+'" aria-label="'+label+': '+escaped(t.name)+'" title="'+label+'">'+(k==='solo'?'S':'M')+'</button>'
@@ -126,8 +176,8 @@ function thumb(p,t){
 function arrangeView(){
  const t=selected(),p=chosen(), n=d.bars
  const cols='style="grid-template-columns:repeat('+n+',var(--barw))"'
- let html=header('PLAYLIST  /  '+pad(n)+' COMPASSOS','Linha do tempo','<label>Duração <input type="number" min="1" max="128" aria-label="Duração em compassos" data-field="bars" value="'+n+'"></label><label>Loop <input min="1" max="'+n+'" type="number" aria-label="Início do loop" data-field="loopStart" value="'+(d.loopStart+1)+'">–<input min="1" max="'+n+'" type="number" aria-label="Fim do loop" data-field="loopEnd" value="'+d.loopEnd+'"></label>'+button('pattern-new','Padrão','plus'))
- html+='<div class="scroll arrange"><div class="timeline"><div class="timeline-head">FAIXAS / '+pad(d.tracks.length)+'</div><div class="ruler" '+cols+'>'
+ let html=header(pad(n)+' COMPASSOS',d.name,'<label>Zoom <select data-field="playlist-zoom" aria-label="Zoom da Playlist">'+[[52,'Compacto'],[92,'Normal'],[144,'Amplo']].map(([x,l])=>'<option value="'+x+'" '+(x===playlistZoom?'selected':'')+'>'+l+'</option>').join('')+'</select></label><label>Duração <input type="number" min="1" max="128" aria-label="Duração em compassos" data-field="bars" value="'+n+'"></label><label>Loop <input min="1" max="'+n+'" type="number" aria-label="Início do loop" data-field="loopStart" value="'+(d.loopStart+1)+'">–<input min="1" max="'+n+'" type="number" aria-label="Fim do loop" data-field="loopEnd" value="'+d.loopEnd+'"></label>'+button('pattern-new','Padrão','plus'))
+ html+='<div class="scroll arrange" style="--barw:'+playlistZoom+'px"><div class="timeline"><div class="timeline-head">FAIXAS / '+pad(d.tracks.length)+'</div><div class="ruler" '+cols+'>'
  for(let b=0;b<n;b++)html+='<button data-seek="'+b+'" class="'+(d.loop&&b>=d.loopStart&&b<d.loopEnd?'looprange':'')+'" aria-label="Reproduzir a partir do compasso '+(b+1)+'">'+pad(b+1)+'</button>'
  html+='<div class="playhead" data-needle="arrange"></div></div>'
  const ps=new Map(d.patterns.map(p=>[p.id,p]))
@@ -149,31 +199,37 @@ function pianoView(){
  const active=p?.notes.find(n=>n.id===selectedNote), maxPattern=t.preset==='sample'?64:16
  let tools=menuPatterns(t)+(p?'<label>Compassos <input type="number" min="1" max="'+maxPattern+'" data-field="patsize" aria-label="Duração do padrão" value="'+p.bars+'"></label>':'')+button('pattern-new','Padrão','plus')
  tools+='<label>Grade <select data-field="snap" aria-label="Grade do piano"><option value="48" '+(snap===48?'selected':'')+'>1/8</option><option value="24" '+(snap===24?'selected':'')+'>1/16</option><option value="12" '+(snap===12?'selected':'')+'>1/32</option></select></label><label>Oitava <input type="number" min="0" max="8" aria-label="Oitava do piano" data-field="octave" value="'+octave+'"></label>'
- let html=header('EDITOR DE NOTAS  /  '+escaped(t.name),nm(p),tools)
+ let html=header('EDITOR DE NOTAS  /  '+t.name,nm(p),tools)
  if(!p)return html+'<div class="empty">Crie um padrão para começar.</div>'
  const high=top, mapped=Array.from({length:top-bottom+1},(_,i)=>top-i)
- html+='<div class="scroll piano"><div class="piano-wrap"><div class="keycol">'+mapped.map(m=>'<button class="key '+(noteName(m).includes('#')?'sharp':'')+'" data-key="'+m+'" aria-label="Ouvir '+noteName(m)+'">'+noteName(m)+'</button>').join('')+'</div><div class="piano-grid" data-top="'+high+'" data-max="'+(p.bars*BAR)+'" style="width:calc('+p.bars*16+' * var(--tickw));--tone:'+tone(t)+'">'
+ html+='<div class="scroll piano"><div class="piano-wrap"><div class="piano-time"><span>NOTAS</span><div style="width:calc('+p.bars*16+' * var(--tickw))">'+Array.from({length:p.bars},(_,i)=>'<b>'+String(i+1)+'</b>').join('')+'</div></div><div class="keycol">'+mapped.map(m=>'<button class="key '+(noteName(m).includes('#')?'sharp':'')+'" data-key="'+m+'" aria-label="Ouvir '+noteName(m)+'">'+noteName(m)+'</button>').join('')+'</div><div class="piano-grid" data-top="'+high+'" data-max="'+(p.bars*BAR)+'" style="width:calc('+p.bars*16+' * var(--tickw))">'
  html+=mapped.map(m=>'<div class="pitch-line '+(noteName(m).includes('#')?'sharp':'')+'"></div>').join('')
- html+=p.notes.filter(n=>n.m>=bottom&&n.m<=top&&n.at<p.bars*BAR).map(n=>'<div class="pnote '+(active?.id===n.id?'selected':'')+'" data-note="'+n.id+'" role="button" tabindex="0" title="'+noteName(n.m)+' | Velocidade '+Math.round(n.v*100)+'%" style="left:calc('+n.at/STEP+' * var(--tickw));width:max(8px,calc('+Math.min(n.len,p.bars*BAR-n.at)/STEP+' * var(--tickw) - 2px));top:'+((top-n.m)*25+2)+'px;opacity:'+(.55+.45*n.v)+'">'+noteName(n.m)+'<span class="resize-note" aria-hidden="true"></span></div>').join('')
+ html+=p.notes.filter(n=>n.m>=bottom&&n.m<=top&&n.at<p.bars*BAR).map(n=>'<div class="pnote '+(active?.id===n.id?'selected':'')+'" data-note="'+n.id+'" role="button" tabindex="0" title="'+noteName(n.m)+' | Velocidade '+Math.round(n.v*100)+'%" style="left:calc('+n.at/STEP+' * var(--tickw));width:max(8px,calc('+Math.min(n.len,p.bars*BAR-n.at)/STEP+' * var(--tickw) - 2px));top:'+((top-n.m)*PITCH_ROW+1)+'px;opacity:'+(.55+.45*n.v)+'">'+noteName(n.m)+'<span class="resize-note" aria-hidden="true"></span></div>').join('')
  html+='<div class="playhead" data-needle="piano"></div></div></div></div>'
+ html+='<div class="velocity-lane"><span>Velocidade</span><div class="velocity-scroll"><div class="velocity-grid" style="width:calc('+p.bars*16+' * var(--tickw))">'+p.notes.filter(n=>n.at<p.bars*BAR).sort((a,b)=>b.v-a.v).map(n=>'<button data-vel-note="'+n.id+'" class="velocity-stem '+(n.id===selectedNote?'active':'')+'" style="left:calc('+n.at/STEP+' * var(--tickw));height:'+Math.round(n.v*93)+'%" aria-label="Selecionar '+noteName(n.m)+' · velocidade '+Math.round(n.v*100)+'%"> </button>').join('')+'</div></div></div>'
  html+='<div class="hints">'+(active?'<label>Velocidade <input data-field="velocity" aria-label="Velocidade da nota" class="field" type="number" min="5" max="100" value="'+Math.round(active.v*100)+'"></label> &nbsp; ':'')+'Clique direito ou Del remove. Arraste a nota para mudar altura ou posição.</div>'
  return html
 }
 function mixView(){
- let h=header('ROTEAMENTO  /  SAÍDA ESTÉREO','Mixer',button('track-edit','Editar faixa','mix')+button('track-plugins','Cadeia '+(selected()?.name||''),'wave'))
- h+='<div class="scroll"><div class="mix-grid">'
- for(const t of [{...track('keys'),id:'master',name:'MASTER',vol:d.master,color:1},...d.tracks]){
-  const m=t.id==='master'
-  h+='<div class="strip '+(t.id===trackId?'sel':'')+'" '+getColor(t)+'><div class="strip-top"><span class="dot"></span><b>'+escaped(t.name)+'</b></div><div class="meterline"><i data-track-meter="'+t.id+'"></i></div>'
-  function slider(k,n,min,max,val){
-   const desc=k==='low'?val+' Hz':k==='pan'?Math.round(val*50):Math.round(val*100)+'%'
-   return '<label>'+n+' <span class="mval">'+desc+'</span><input aria-label="'+n+': '+escaped(t.name)+'" data-mix="'+k+'" data-id="'+t.id+'" type="range" min="'+min+'" max="'+max+'" step="'+(k==='low'?50:'.01')+'" value="'+val+'"></label>'
-  }
-  h+=slider('vol','Volume',0,1.5,t.vol)
-  if(!m)h+=slider('pan','Pan',-1,1,t.pan)+slider('low','Filtro',140,20000,t.low)+slider('delay','Delay',0,.55,t.delay)+slider('verb','Reverb',0,.55,t.verb)+slider('drive','Saturação',0,1,t.drive)+'<div>'+muteButton(t,'mute','Silenciar')+' '+muteButton(t,'solo','Solo')+'</div>'
-  h+='</div>'
+ if(mixTarget!=='master'&&!d.tracks.some(t=>t.id===mixTarget))mixTarget='master'
+ const strips=[{id:'master',name:'Master',vol:d.master,color:1},...d.tracks], active=strips.find(t=>t.id===mixTarget)
+ const h=header('ROTEAMENTO / SAÍDA ESTÉREO','Mixer',(active.id==='master'?'':'<button class="btn subtle" data-mix-edit="'+active.id+'">'+ic('mix')+' Editar faixa</button>')+'<button class="btn subtle" data-mix-fx="'+active.id+'">'+ic('wave')+' Editar inserts</button>')
+ function slider(t,k,label,min,max,step){
+  const v=t[k],desc=k==='low'?v+' Hz':k==='pan'?Math.round(v*50):Math.round(v*100)+'%'
+  return '<label class="mix-'+k+'"><span>'+label+'</span><span class="mval">'+desc+'</span><input aria-label="'+label+': '+escaped(t.name)+'" data-mix="'+k+'" data-id="'+t.id+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+v+'"></label>'
  }
- return h+'</div></div><div class="hints">Filtro passa-baixas por faixa. Delay sincronizado ao BPM. Compressor de proteção no master.</div>'
+ let out=h+'<div class="mixer-deck"><div class="scroll mix"><div class="mix-grid">'
+ strips.forEach((t,i)=>{
+  out+='<section class="strip '+(t.id===mixTarget?'sel':'')+'" '+getColor(t)+'><button class="strip-top" data-mix-target="'+t.id+'" aria-pressed="'+(t.id===mixTarget)+'" title="'+escaped(t.name)+'"><span>'+(!i?'M':pad(i))+'</span><b>'+escaped(t.name)+'</b></button><div class="strip-pan">'+(i?slider(t,'pan','Pan',-1,1,.01):'<span>ESTÉREO</span>')+'</div><div class="fader-area"><div class="meterline"><i data-track-meter="'+t.id+'"></i></div>'+slider(t,'vol','Volume',0,1.5,.01)+'</div><div class="strip-switch">'+(i?muteButton(t,'mute','Silenciar')+muteButton(t,'solo','Solo'):'<span>SAÍDA</span>')+'</div></section>'
+ })
+ const chain=active.id==='master'?d.masterFx:active.fx
+ out+='</div></div><aside class="insert-bank"><div class="insert-title"><strong>'+escaped(active.name)+'</strong><span>INSERTS</span></div>'
+ for(let i=0;i<FX_LIMIT;i++){
+  const slot=chain?.[i]
+  out+='<button class="insert '+(slot&&!slot.bypass?'loaded':'')+'" data-mix-fx="'+active.id+'" data-slot="'+(slot?.id||'')+'" title="'+(slot?'Editar '+FX_TYPES[slot.type].name:'Abrir cadeia de plugins')+'"><span>'+pad(i+1)+'</span><b>'+(slot?FX_TYPES[slot.type].name:'Vazio')+'</b><i></i></button>'
+ }
+ if(active.id!=='master')out+='<details><summary>Ajustes do canal</summary>'+slider(active,'low','Filtro',140,20000,50)+slider(active,'delay','Delay',0,.55,.01)+slider(active,'verb','Reverb',0,.55,.01)+slider(active,'drive','Saturação',0,1,.01)+'</details>'
+ return out+'</aside></div><div class="hints">Selecione um canal para abrir seus inserts. Medidores mostram picos do sinal.</div>'
 }
 function autoView(){
  const t=selected()
@@ -190,26 +246,42 @@ function rack(){
  stepBar=clamp(stepBar,0,max-1)
  $('#stepbar').textContent=pad(stepBar+1)+' / '+pad(max)
  $('#bar-down').disabled=stepBar<=0;$('#bar-up').disabled=stepBar>=max-1
- const whole=d.tracks.map(t=>{
+ const whole=d.tracks.map((t,i)=>{
   const cur=t.id===trackId?chosen():current(t)
   const pitch=PRESETS[t.preset][1]==='drum'?({kick:36,snare:38,hat:42,clap:39,perc:45}[t.preset]||60):60
   const notes=cur?.notes||[]
-  return '<div class="rack-meta '+(t.id===trackId?'selected':'')+'" '+getColor(t)+'><button class="trackpick" data-track="'+t.id+'"><span class="dot"></span><b>'+escaped(t.name)+'</b></button><button class="mini" title="Piano roll" aria-label="Abrir piano roll de '+escaped(t.name)+'" data-open-roll="'+t.id+'">♪</button></div><div class="rack-steps" '+getColor(t)+'>'+Array.from({length:16},(_,j)=>{
+  return '<div class="rack-meta '+(t.id===trackId?'selected':'')+'" '+getColor(t)+'><span class="rack-route" title="Canal do Mixer">'+pad(i+1)+'</span>'+muteButton(t,'mute','Silenciar')+'<button class="trackpick" data-track="'+t.id+'"><span class="dot"></span><b>'+escaped(t.name)+'</b></button><button class="mini" title="Piano roll" aria-label="Abrir piano roll de '+escaped(t.name)+'" data-open-roll="'+t.id+'">♪</button></div><div class="rack-steps" '+getColor(t)+'>'+Array.from({length:16},(_,j)=>{
    const at=BAR*stepBar+STEP*j,on=notes.some(n=>n.at===at&&(PRESETS[t.preset][1]==='drum'||n.m===pitch))
-   return '<button class="step '+(Math.floor(j/4)%2?'group ':'')+(on?'on':'')+'" aria-pressed="'+on+'" aria-label="'+escaped(t.name)+' passo '+(j+1)+'" data-step="'+j+'" data-id="'+t.id+'" data-pitch="'+pitch+'" '+(stepBar>=(cur?.bars||1)?'disabled':'')+'>'+(j%4===0?pad(j+1):'')+'</button>'
+   return '<button class="step '+(Math.floor(j/4)%2?'group ':'')+(on?'on':'')+'" aria-pressed="'+on+'" aria-label="'+escaped(t.name)+' passo '+(j+1)+'" data-step="'+j+'" data-id="'+t.id+'" data-pitch="'+pitch+'" '+(stepBar>=(cur?.bars||1)?'disabled':'')+'>'+''+'</button>'
   }).join('')+'</div>'
  }).join('')
  $('#steps').innerHTML='<div class="scroll"><div class="racklist">'+whole+'</div></div>'
 }
 function draw(){
+ const oldSettings=editor.querySelector('.insert-bank details')?.open,oldMixTarget=editor.querySelector('.strip.sel [data-mix-target]')?.dataset.mixTarget
  const el=editor.querySelector('.scroll')
  const before=el&&el.classList.contains(view)?[el.scrollLeft,el.scrollTop]:null
  const oldPiano=view==='piano'&&el?.classList.contains('piano')
  editor.innerHTML=({arrange:arrangeView,piano:pianoView,mix:mixView,plugins:pluginsView,auto:autoView}[view])()
  const after=editor.querySelector('.scroll')
  if(after&&before)[after.scrollLeft,after.scrollTop]=before
- if(after&&view==='piano'&&!oldPiano)after.scrollTop=125
- rack();renderTransport();frame(tick,player.g)
+ if(after&&view==='piano'){
+  if(!oldPiano){
+   const p=chosen(),g=after.querySelector('.piano-grid')
+   if(p?.notes.length&&g){
+    const centers=p.notes.map(n=>n.m).sort((a,b)=>a-b),m=centers[Math.floor(centers.length/2)]
+    after.scrollTop=Math.max(0,(Number(g.dataset.top)-m)*PITCH_ROW-after.clientHeight*.4)
+   }
+  }
+  const velocities=editor.querySelector('.velocity-scroll')
+  if(velocities){
+   const onScroll=()=>{velocities.scrollLeft=after.scrollLeft}
+   onScroll();after.addEventListener('scroll',onScroll,{passive:true})
+  }
+ }
+ const settings=editor.querySelector('.insert-bank details')
+ if(settings&&oldMixTarget===mixTarget&&oldSettings)settings.open=true
+ rack();if(libraryTab==='project')library();renderTransport();frame(tick,player.g)
 }
 const meter=$('#meter'),mc=meter.getContext('2d')
 const fft=new Uint8Array(256),scope=new Float32Array(512)
@@ -233,14 +305,14 @@ function frame(raw,g){
   mc.clearRect(0,0,152,29)
   if(g){
    g.amp.getByteFrequencyData(fft)
-   for(let k=0;k<27;k++){const p=Math.min(255,Math.floor(k**1.37*.82)),x=fft[p]/255;mc.fillStyle=k>20?'#df9f77':'#79c7ae';mc.fillRect(k*5.6+1,28-Math.max(1,x*28),3,Math.max(1,x*28))}
+   for(let k=0;k<27;k++){const p=Math.min(255,Math.floor(k**1.37*.82)),x=fft[p]/255;mc.fillStyle=k>20?'#f1ae65':'#a4c975';mc.fillRect(k*5.6+1,28-Math.max(1,x*28),3,Math.max(1,x*28))}
   }else{mc.fillStyle='#52675c';for(let k=0;k<27;k++)mc.fillRect(k*5.6+1,27,3,1)}
  }
  if(view==='mix')for(const e of $$('[data-track-meter]')){
   const a=e.dataset.trackMeter==='master'?g?.amp:g?.channels.get(e.dataset.trackMeter)?.meter
   let max=0
   if(a){const bin=scope.subarray(0,a.fftSize);a.getFloatTimeDomainData(bin);for(const z of bin)max=Math.max(max,Math.abs(z))}
-  e.style.width=Math.min(100,max*138)+'%'
+  e.style.height=Math.min(100,max*138)+'%'
  }
 }
 const player=new Player(frame,()=>{tick=0;renderTransport();frame(0,null)})
@@ -447,15 +519,20 @@ function updateWave(){
 const cmds={
  play,stop:()=>mic?mic.capture.stop():halt(true),undo:()=>restore('undo'),redo:()=>restore('redo'),
  loop:()=>change(()=>d.loop=!d.loop),record:recordSetup,'rec-stop':()=>mic?.capture.stop(),'record-now':microphone,
+ 'edit-menu':()=>dialog('Editar','<div class="d-actions stack">'+button('undo-close','Desfazer','undo')+button('redo-close','Refazer','redo')+button('track-edit','Editar faixa','mix')+button('pattern-new','Gerenciar padrão','grid')+'</div>'),
+ 'undo-close':()=>{dlog.close();restore('undo')},'redo-close':()=>{dlog.close();restore('redo')},
+ 'add-menu':()=>dialog('Adicionar canal','<div class="d-actions stack">'+Object.entries(PRESETS).filter(([k])=>k!=='sample').map(([k,[n,type]])=>'<button class="btn subtle" data-add="'+k+'">'+ic(type)+escaped(n)+'</button>').join('')+button('sample','Importar áudio','up')+'</div>'),
+ 'view-menu':()=>dialog('Visualizar','<div class="d-actions stack">'+[['arrange','Playlist (F5)','grid'],['piano','Piano Roll (F7)','piano'],['mix','Mixer (F9)','mix'],['plugins','Plugins','wave'],['auto','Automação','trend']].map(([k,n,i])=>'<button class="btn subtle" data-view="'+k+'">'+ic(i)+n+'</button>').join('')+button('rack-close-menu','Channel Rack (F6)','rack')+button('browser-close-menu','Browser (Alt+F8)','folder')+'</div>'),
+ 'rack-close-menu':()=>{dlog.close();toggleRack()},'browser-close-menu':()=>{dlog.close();toggleBrowser()},
  files:()=>dialog('Projeto','<p>O autosave é local a este navegador. Faça backup para trocar de dispositivo ou manter outra versão editável.</p><div class="d-actions stack">'+button('save','Salvar local','save')+button('backup','Backup .onda','down',true)+button('open','Abrir .onda ou MIDI','up')+button('new','Projeto vazio','plus')+button('demo','Carregar demonstração','wave')+'</div>'),
  'new':()=>{dlog.close();load(blank());toast('Projeto vazio criado. Ctrl+Z recupera a versão anterior nesta sessão.')},
  demo:()=>{dlog.close();load(demo());toast('Demonstração carregada.')},
- open:()=>$('#project-file').click(),backup,save:()=>saveNow(true),close:()=>dlog.close(),sounds:()=>$('#browser').classList.toggle('show'),
- sample:()=>{sampleTarget='';$('#audio-file').click()},
+ open:()=>$('#project-file').click(),backup,save:()=>saveNow(true),close:()=>dlog.close(),sounds:toggleBrowser,rack:toggleRack,'rack-float':()=>{if(desktop.matches)floatRack(!rackFloat)},
+ sample:()=>{sampleTarget='';if(dlog.open)dlog.close();$('#audio-file').click()},
  'sample-replace':()=>{sampleTarget=selected().id;dlog.close();$('#audio-file').click()},
  export:()=>dialog('Exportar','<p>O WAV da música inclui os plugins e renderiza a playlist toda, sem o limite da região de loop.</p><div class="rec-fields"><label>Taxa de amostragem<select id="wav-rate" aria-label="Taxa de amostragem"><option value="48000" '+(exportRate===48000?'selected':'')+'>48 kHz</option><option value="44100" '+(exportRate===44100?'selected':'')+'>44,1 kHz</option></select></label><label>Resolução do WAV<select id="wav-depth" aria-label="Resolução do WAV"><option value="24" '+(exportDepth===24?'selected':'')+'>24 bits PCM</option><option value="16" '+(exportDepth===16?'selected':'')+'>16 bits PCM</option></select></label></div><div class="d-actions stack">'+button('wav-song','Música em WAV','down',true)+button('wav-pattern','Padrão em WAV','down')+button('wav-track','Faixa em WAV','down')+button('midi','MIDI','down')+button('backup','Projeto .onda','save')+'</div>'),
  'wav-song':()=>bounce('song'),'wav-pattern':()=>bounce('pattern'),'wav-track':()=>bounce('stem'),midi:()=>bounce('midi'),
- help:()=>dialog('Atalhos e ajuda','<ul><li><b>Espaço:</b> reproduzir / pausar. <b>Del:</b> apagar seleção.</li><li><b>Ctrl+S:</b> salvar localmente. <b>Ctrl+Z:</b> desfazer. <b>Ctrl+Shift+Z:</b> refazer.</li><li>Escolha ou crie um padrão em cada faixa. Clique em um compasso vazio pra inserir. Dê dois cliques no clipe pra editar.</li><li>O sequenciador é de 16 passos; o piano roll edita altura, duração e velocidade. Ajuste a oitava pra acessar mais notas.</li><li>No Mixer, mute e solo afetam reprodução e WAV. Em Automação, adicione pontos por compasso. O volume varia gradualmente entre os pontos.</li><li>O MIDI exporta notas, não timbres. O .onda contém os samples e fica editável.</li></ul>'),
+ help:()=>dialog('Atalhos e ajuda','<ul><li><b>F5:</b> Playlist · <b>F6:</b> Channel Rack · <b>F7:</b> Piano Roll · <b>F9:</b> Mixer · <b>Alt+F8:</b> Browser.</li><li><b>Espaço:</b> reproduzir / pausar. <b>Del:</b> apagar seleção.</li><li><b>Ctrl+S:</b> salvar localmente. <b>Ctrl+Z:</b> desfazer. <b>Ctrl+Shift+Z:</b> refazer.</li><li>Escolha ou crie um padrão em cada faixa. Clique em um compasso vazio pra inserir. Dê dois cliques no clipe pra editar.</li><li>O sequenciador é de 16 passos; o piano roll edita altura, duração e velocidade. Ajuste a oitava pra acessar mais notas.</li><li>No Mixer, mute e solo afetam reprodução e WAV. Em Automação, adicione pontos por compasso. O volume varia gradualmente entre os pontos.</li><li>O MIDI exporta notas, não timbres. O .onda contém os samples e fica editável.</li></ul>'),
  'track-edit':editTrack,'track-plugins':()=>{fxTarget=selected().id;fxSelected='';view='plugins';draw()},
  'track-apply':()=>{
   const t=selected(),name=$('#track-name').value.trim(),color=Number($('#track-color').value)
@@ -509,7 +586,7 @@ function chooseClip(c,redraw=true){
   trackId=p.track;patternId=p.id;patterns.set(p.track,p.id);stepBar=0;selectedNote=''
   $$('.clip').forEach(x=>x.classList.toggle('selected',x.dataset.clip===selectedClip))
   $$('.track-label').forEach(x=>x.classList.toggle('selected',x.querySelector('[data-track]')?.dataset.track===trackId))
-  rack()
+  rack();renderTransport();if(libraryTab==='project')library()
  }
 }
 let drag=null,skipClick=0
@@ -555,7 +632,7 @@ document.addEventListener('pointerup',e=>{
    change(()=>n.len=clamp(n.len+Math.round(dx/(b.w*snap))*snap,Math.min(snap,p.bars*BAR-n.at),p.bars*BAR-n.at))
   }else{
    const prev=n.m
-   change(()=>{n.at=clamp(n.at+Math.round(dx/(b.w*snap))*snap,0,p.bars*BAR-snap);n.m=clamp(n.m-Math.round(dy/25),0,127);n.len=Math.min(n.len,p.bars*BAR-n.at)})
+   change(()=>{n.at=clamp(n.at+Math.round(dx/(b.w*snap))*snap,0,p.bars*BAR-snap);n.m=clamp(n.m-Math.round(dy/PITCH_ROW),0,127);n.len=Math.min(n.len,p.bars*BAR-n.at)})
    if(prev!==n.m)noteWill(p,n)
   }
  }
@@ -564,10 +641,16 @@ function act(e){
  const b=e.target.closest('button,[data-note]'), now=performance.now()
  if(b?.disabled)return
  if(b?.dataset.cmd){cmds[b.dataset.cmd]?.();return}
- if(b?.dataset.view){view=b.dataset.view;selectedNote='';draw();return}
+ if(b?.dataset.view){if(dlog.open)dlog.close();setView(b.dataset.view);return}
+ if(b?.dataset.mixTarget){mixTarget=b.dataset.mixTarget;draw();return}
+ if(b?.dataset.mixEdit){select(b.dataset.mixEdit);editTrack();return}
+ if(b?.dataset.velNote){selectedNote=b.dataset.velNote;draw();$('#editor [data-field=velocity]')?.focus({preventScroll:true});return}
+ if(b?.dataset.mixFx){fxTarget=b.dataset.mixFx;fxSelected=b.dataset.slot||'';setView('plugins');return}
+ if(b?.dataset.library){libraryTab=b.dataset.library;library();return}
+ if(b?.dataset.libraryPattern){const p=d.patterns.find(p=>p.id===b.dataset.libraryPattern);if(p)select(p.track,p);return}
  if(b?.dataset.mode){if(mic||recWait)return;if(mode!==b.dataset.mode){mode=b.dataset.mode;tick=0;replay(0);draw()}return}
  if(b?.dataset.preview){player.preview(track(b.dataset.preview),PRESETS[b.dataset.preview][1]==='drum'?38:60,.31).catch(e=>toast(e.message));return}
- if(b?.dataset.add){addTrack(b.dataset.add);return}
+ if(b?.dataset.add){if(dlog.open)dlog.close();addTrack(b.dataset.add);return}
  if(b?.dataset.toggle){const t=d.tracks.find(x=>x.id===b.dataset.id);const k=b.dataset.toggle;if(t&&['mute','solo'].includes(k))change(()=>t[k]=!t[k]);return}
  if(b?.dataset.track){select(b.dataset.track);return}
  if(b?.dataset.openRoll){view='piano';select(b.dataset.openRoll);return}
@@ -586,7 +669,7 @@ function act(e){
  if(grid&&p&&now>=skipClick){
   if(p.notes.length>=4096)return toast('Limite de notas no padrão.')
   const size=grid.getBoundingClientRect(),at=clamp(Math.floor(((e.clientX-size.left)/size.width*p.bars*BAR)/snap)*snap,0,p.bars*BAR-snap)
-  const m=clamp(Number(grid.dataset.top)-Math.floor((e.clientY-size.top)/25),0,127),n=note(at,m,snap,.82)
+  const m=clamp(Number(grid.dataset.top)-Math.floor((e.clientY-size.top)/PITCH_ROW),0,127),n=note(at,m,snap,.82)
   change(()=>{p.notes.push(n);selectedNote=n.id});noteWill(p,n)
  }
 }
@@ -623,6 +706,7 @@ document.addEventListener('change',e=>{
   change(()=>{p.bars=n;p.notes=p.notes.filter(x=>x.at<n*BAR);p.notes.forEach(x=>x.len=Math.min(x.len,n*BAR-x.at))});return
  }
  if(k==='velocity'&&p){const n=p.notes.find(x=>x.id===selectedNote);if(n)change(()=>n.v=clamp(+b.value/100||.8,.05,1));return}
+ if(k==='playlist-zoom'){playlistZoom=+b.value;draw();return}
  if(k==='snap'){snap=+b.value;return}
  if(k==='octave'){octave=clamp(+b.value||0,0,8);draw();return}
  if(b.dataset.mix){
@@ -676,7 +760,13 @@ editor.addEventListener('drop',async e=>{
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&dlog.open)return
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow(true);return}
- if(e.target.matches('input,textarea,select')||e.target.isContentEditable||dlog.open)return
+ if(dlog.open)return
+ if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+  if(e.altKey&&e.key==='F8'){e.preventDefault();toggleBrowser();return}
+  if(!e.altKey&&e.key==='F6'){e.preventDefault();toggleRack();return}
+  if(!e.altKey&&Object.hasOwn(shortcuts,e.key)){e.preventDefault();setView(shortcuts[e.key]);return}
+ }
+ if(e.target.matches('input,textarea,select')||e.target.isContentEditable)return
  if(e.code==='Space'&&!e.target.matches('button,[role=button]')){e.preventDefault();play();return}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();restore(e.shiftKey?'redo':'undo');return}
  if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelected()}
